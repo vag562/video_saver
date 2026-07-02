@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
+
+
+class VideoInfoError(Exception):
+    def __init__(self, code: str, message: str):
+        self.code = code
+        super().__init__(message)
+
+
+@dataclass(frozen=True)
+class FormatOption:
+    key: str
+    label: str
+
+
+DEFAULT_OPTIONS = [
+    FormatOption("360", "360p"),
+    FormatOption("480", "480p"),
+    FormatOption("720", "720p"),
+    FormatOption("1080", "1080p"),
+    FormatOption("best", "Best"),
+    FormatOption("mp3", "MP3"),
+]
+
+
+def extract_info(url: str) -> dict[str, Any]:
+    opts = {"quiet": True, "skip_download": True, "noplaylist": True, "socket_timeout": 20}
+    try:
+        with YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except DownloadError as exc:
+        msg = str(exc).lower()
+        if "private" in msg:
+            raise VideoInfoError("private_video", "Видео приватное или требует авторизацию") from exc
+        if "unsupported url" in msg:
+            raise VideoInfoError("unsupported_url", "Ссылка не поддерживается") from exc
+        raise VideoInfoError("video_unavailable", "Видео недоступно или ссылка некорректна") from exc
+    except Exception as exc:
+        raise VideoInfoError("yt_dlp_error", "Не удалось получить информацию о видео") from exc
+    if not info:
+        raise VideoInfoError("video_unavailable", "Видео недоступно")
+    return info
+
+
+def public_info(info: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "title": info.get("title") or "Без названия",
+        "duration": info.get("duration"),
+        "thumbnail": info.get("thumbnail"),
+        "formats": [option.__dict__ for option in DEFAULT_OPTIONS],
+    }
+
+
+def format_selector(quality: str) -> str:
+    if quality == "best":
+        return "bv*+ba/b"
+    if quality == "mp3":
+        return "bestaudio/best"
+    return f"bv*[height<={quality}]+ba/b[height<={quality}]/b"
+
+
+def download(url: str, quality: str, output_dir: Path, job_id: str) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    outtmpl = str(output_dir / f"{job_id}.%(ext)s")
+    opts: dict[str, Any] = {
+        "format": format_selector(quality),
+        "outtmpl": outtmpl,
+        "noplaylist": True,
+        "quiet": True,
+        "merge_output_format": "mp4",
+        "postprocessor_args": ["-movflags", "+faststart"],
+    }
+    if quality == "mp3":
+        opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]
+    try:
+        with YoutubeDL(opts) as ydl:
+            ydl.download([url])
+    except DownloadError as exc:
+        msg = str(exc).lower()
+        if "ffmpeg" in msg:
+            raise VideoInfoError("ffmpeg_error", "Ошибка ffmpeg при обработке файла") from exc
+        raise VideoInfoError("yt_dlp_error", "Ошибка yt-dlp при скачивании") from exc
+    matches = list(output_dir.glob(f"{job_id}.*"))
+    if not matches:
+        raise VideoInfoError("yt_dlp_error", "Файл не был создан")
+    return max(matches, key=lambda p: p.stat().st_size)
