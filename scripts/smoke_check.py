@@ -8,6 +8,7 @@ Docker Compose service names, key environment variables, and important code hook
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -60,6 +61,19 @@ def check_env_example() -> None:
     missing = EXPECTED_ENV - present
     if missing:
         fail(f".env.example misses variables: {', '.join(sorted(missing))}")
+    admin_line = next(
+        (line for line in env_text.splitlines() if line.startswith("ADMIN_USER_IDS=")),
+        None,
+    )
+    if admin_line is None:
+        fail(".env.example misses ADMIN_USER_IDS")
+    admin_value = admin_line.split("=", 1)[1]
+    try:
+        parsed_admins = json.loads(admin_value)
+    except json.JSONDecodeError as exc:
+        fail(f"ADMIN_USER_IDS must be a JSON list: {exc}")
+    if not isinstance(parsed_admins, list):
+        fail("ADMIN_USER_IDS must be a JSON list")
 
 
 def check_compose_services() -> None:

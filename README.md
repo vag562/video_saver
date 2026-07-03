@@ -52,7 +52,7 @@ Telegram-бот принимает ссылку на видео (YouTube, TikTok
 | `PUBLIC_BASE_URL` | Публичный адрес backend/Nginx для временных ссылок. |
 | `DATABASE_URL` | SQLAlchemy URL PostgreSQL (`postgresql+asyncpg://...`). |
 | `REDIS_URL` | URL Redis для RQ. |
-| `ADMIN_USER_IDS` | Список Telegram user id через запятую, для которых нет лимита активных задач. |
+| `ADMIN_USER_IDS` | JSON-список Telegram user id, для которых нет лимита активных задач. Пример: `ADMIN_USER_IDS=[123456789,987654321]`. |
 | `DOWNLOADS_DIR` | Каталог скачанных файлов внутри контейнера. |
 | `MAX_TELEGRAM_FILE_MB` | Лимит отправки файла в Telegram; по умолчанию 1900. |
 | `DOWNLOAD_LINK_TTL_SECONDS` | Срок жизни временной ссылки; по умолчанию 10800 секунд (3 часа). |

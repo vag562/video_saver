@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 from pathlib import Path
 
@@ -30,7 +31,13 @@ class Settings(BaseSettings):
             return {int(v) for v in value}
         if not value:
             return set()
-        return {int(part.strip()) for part in value.split(",") if part.strip()}
+        raw_value = value.strip()
+        if raw_value.startswith("["):
+            parsed = json.loads(raw_value)
+            if not isinstance(parsed, list):
+                raise ValueError("ADMIN_USER_IDS must be a JSON list")
+            return {int(v) for v in parsed}
+        return {int(part.strip()) for part in raw_value.split(",") if part.strip()}
 
     @property
     def telegram_file_limit_bytes(self) -> int:
