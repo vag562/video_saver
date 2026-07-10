@@ -158,10 +158,28 @@ def check_important_hooks() -> None:
     ytdlp = (ROOT / "app/services/ytdlp.py").read_text(encoding="utf-8")
     if "telegram_file_limit_bytes" not in worker or "/downloads/" not in worker:
         fail("worker must enforce Telegram size limit and generate temporary links")
+    models = (ROOT / "app/db/models.py").read_text(encoding="utf-8")
+    if "class MediaCache" not in models or "telegram_file_id" not in models:
+        fail("database models must define media_cache with telegram_file_id")
     if "ffprobe" not in media or "libx264" not in media or "aac" not in media:
         fail("media service must validate and convert files with ffprobe/ffmpeg")
     if "vcodec^=avc1" not in ytdlp or "acodec^=mp4a" not in ytdlp:
         fail("yt-dlp format selector must prefer H.264/AAC formats")
+    if "best[ext=mp4][height<=" not in ytdlp or "is_fast_quality" not in ytdlp:
+        fail("yt-dlp format selector must provide fast unified MP4 formats")
+    if "send_video" not in worker or "supports_streaming=True" not in worker:
+        fail("worker must send MP4 files via send_video with streaming support")
+    for timing_name in [
+        "metadata_time",
+        "cache_lookup_time",
+        "download_time",
+        "merge_time",
+        "conversion_time",
+        "telegram_upload_time",
+        "total_time",
+    ]:
+        if timing_name not in worker:
+            fail(f"worker must log {timing_name}")
     api = (ROOT / "app/api/main.py").read_text(encoding="utf-8")
     if "expires_at" not in api:
         fail("download API must validate link expiration")

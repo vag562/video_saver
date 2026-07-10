@@ -1,4 +1,5 @@
 import json
+from time import perf_counter
 
 from aiogram import Dispatcher, F
 from aiogram.filters import CommandStart
@@ -37,11 +38,13 @@ async def start(message: Message) -> None:
 async def handle_url(message: Message) -> None:
     assert message.text and message.from_user
     await message.answer("Проверяю ссылку через yt-dlp...")
+    metadata_started = perf_counter()
     try:
         info = extract_info(message.text.strip())
     except VideoInfoError as exc:
         await message.answer(f"Ошибка: {exc}")
         return
+    metadata_time = perf_counter() - metadata_started
     data = public_info(info)
     buttons = [
         [InlineKeyboardButton(text=item["label"], callback_data=f"quality:{item['key']}")]
@@ -54,7 +57,14 @@ async def handle_url(message: Message) -> None:
     redis_connection().setex(
         pending_video_key(message.from_user.id, sent.message_id),
         PENDING_VIDEO_TTL_SECONDS,
-        json.dumps({"url": message.text.strip(), "title": data["title"]}, ensure_ascii=False),
+        json.dumps(
+            {
+                "url": message.text.strip(),
+                "title": data["title"],
+                "metadata_time": metadata_time,
+            },
+            ensure_ascii=False,
+        ),
     )
 
 
@@ -69,6 +79,7 @@ async def handle_quality(callback: CallbackQuery) -> None:
     payload = json.loads(cached)
     url = payload["url"]
     title = payload.get("title")
+    metadata_time = float(payload.get("metadata_time") or 0)
 
     settings = get_settings()
     async with AsyncSessionLocal() as session:
@@ -95,7 +106,7 @@ async def handle_quality(callback: CallbackQuery) -> None:
         await session.refresh(job)
 
     Queue(settings.rq_queue_name, connection=Redis.from_url(settings.redis_url)).enqueue(
-        "app.worker.tasks.process_download", str(job.id), job_timeout="6h"
+        "app.worker.tasks.process_download", str(job.id), metadata_time, job_timeout="6h"
     )
     redis_connection().delete(pending_video_key(callback.from_user.id, callback.message.message_id))
     await callback.message.answer(f"Задача создана: <code>{job.id}</code>\nСтатус: pending")

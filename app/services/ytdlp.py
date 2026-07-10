@@ -65,10 +65,21 @@ def format_selector(quality: str) -> str:
         return "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[vcodec^=avc1]/best"
     if quality == "mp3":
         return "bestaudio/best"
+    if quality in {"360", "480", "720"}:
+        return (
+            f"best[ext=mp4][height<={quality}][vcodec^=avc1]/"
+            f"best[ext=mp4][height<={quality}][vcodec!*=av01][vcodec!*=vp9][vcodec!*=vp09]/"
+            f"bestvideo[vcodec^=avc1][height<={quality}]+bestaudio[acodec^=mp4a]/"
+            f"best[vcodec^=avc1][height<={quality}]/best[height<={quality}]"
+        )
     return (
         f"bestvideo[vcodec^=avc1][height<={quality}]+bestaudio[acodec^=mp4a]/"
         f"best[vcodec^=avc1][height<={quality}]/best[height<={quality}]"
     )
+
+
+def is_fast_quality(quality: str) -> bool:
+    return quality in {"360", "480", "720"}
 
 
 def download(url: str, quality: str, output_dir: Path, job_id: str) -> Path:

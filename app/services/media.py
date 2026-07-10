@@ -25,6 +25,9 @@ class MediaProcessingError(Exception):
 class ProbeResult:
     video_codec: str | None
     audio_codec: str | None
+    duration: int | None = None
+    width: int | None = None
+    height: int | None = None
 
     @property
     def needs_conversion(self) -> bool:
@@ -46,6 +49,7 @@ def probe_media(path: Path) -> ProbeResult:
         "-print_format",
         "json",
         "-show_streams",
+        "-show_format",
         str(path),
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
@@ -58,14 +62,36 @@ def probe_media(path: Path) -> ProbeResult:
 
     video_codec = None
     audio_codec = None
+    duration = None
+    width = None
+    height = None
+    format_duration = payload.get("format", {}).get("duration")
+    if format_duration is not None:
+        try:
+            duration = int(float(format_duration))
+        except (TypeError, ValueError):
+            duration = None
     for stream in payload.get("streams", []):
         codec_type = stream.get("codec_type")
         codec_name = stream.get("codec_name")
         if codec_type == "video" and video_codec is None:
             video_codec = codec_name
+            width = stream.get("width")
+            height = stream.get("height")
+            if duration is None and stream.get("duration") is not None:
+                try:
+                    duration = int(float(stream["duration"]))
+                except (TypeError, ValueError):
+                    duration = None
         elif codec_type == "audio" and audio_codec is None:
             audio_codec = codec_name
-    return ProbeResult(video_codec=video_codec, audio_codec=audio_codec)
+    return ProbeResult(
+        video_codec=video_codec,
+        audio_codec=audio_codec,
+        duration=duration,
+        width=width,
+        height=height,
+    )
 
 
 def ensure_compatible_mp4(path: Path, job_id: str) -> Path:
