@@ -25,10 +25,21 @@ EXPECTED_FILES = [
     "app/worker/run.py",
     "app/worker/cleanup.py",
 ]
-EXPECTED_SERVICES = {"postgres", "redis", "api", "bot", "worker", "cleanup", "nginx"}
+EXPECTED_SERVICES = {
+    "postgres",
+    "redis",
+    "telegram-bot-api",
+    "api",
+    "bot",
+    "worker",
+    "cleanup",
+    "nginx",
+}
 EXPECTED_ENV = {
     "BOT_TOKEN",
     "BOT_API_BASE_URL",
+    "TELEGRAM_API_ID",
+    "TELEGRAM_API_HASH",
     "PUBLIC_BASE_URL",
     "DATABASE_URL",
     "REDIS_URL",
@@ -74,6 +85,14 @@ def check_env_example() -> None:
         fail(f"ADMIN_USER_IDS must be a JSON list: {exc}")
     if not isinstance(parsed_admins, list):
         fail("ADMIN_USER_IDS must be a JSON list")
+    bot_api_line = next(
+        (line for line in env_text.splitlines() if line.startswith("BOT_API_BASE_URL=")),
+        None,
+    )
+    if bot_api_line is None:
+        fail(".env.example misses BOT_API_BASE_URL")
+    if bot_api_line.split("=", 1)[1] != "http://telegram-bot-api:8081":
+        fail("BOT_API_BASE_URL must default to http://telegram-bot-api:8081")
 
 
 def check_compose_services() -> None:
@@ -82,16 +101,32 @@ def check_compose_services() -> None:
     services = set()
     for match in re.finditer(r"^  ([a-zA-Z0-9_-]+):$", services_block, flags=re.MULTILINE):
         name = match.group(1)
-        if name not in {"postgres_data", "redis_data", "downloads"}:
+        if name not in {"postgres_data", "redis_data", "telegram_bot_api_data", "downloads"}:
             services.add(name)
     missing = EXPECTED_SERVICES - services
     if missing:
         fail(f"docker-compose.yml misses services: {', '.join(sorted(missing))}")
-    for service in ["api", "bot", "worker", "cleanup"]:
+    service_bodies = {}
+    for service in ["telegram-bot-api", "api", "bot", "worker", "cleanup"]:
         pattern = rf"^  {service}:\n(?P<body>(?:    .+\n|\n)+?)(?=^  [a-zA-Z0-9_-]+:|^volumes:|\Z)"
         match = re.search(pattern, compose, flags=re.MULTILINE)
-        if not match or "env_file: .env" not in match.group("body"):
+        if not match:
+            fail(f"service {service} is not defined")
+        body = match.group("body")
+        service_bodies[service] = body
+        if "env_file: .env" not in body:
             fail(f"service {service} must use env_file: .env")
+    telegram_body = service_bodies["telegram-bot-api"]
+    if "image: aiogram/telegram-bot-api" not in telegram_body:
+        fail("telegram-bot-api service must use aiogram/telegram-bot-api image")
+    if "TELEGRAM_API_ID" not in telegram_body or "TELEGRAM_API_HASH" not in telegram_body:
+        fail("telegram-bot-api service must pass TELEGRAM_API_ID and TELEGRAM_API_HASH")
+    if '"8081"' not in telegram_body and "8081" not in telegram_body:
+        fail("telegram-bot-api service must expose port 8081 inside Docker network")
+    if "telegram_bot_api_data:/var/lib/telegram-bot-api" not in telegram_body:
+        fail("telegram-bot-api service must mount telegram_bot_api_data volume")
+    if "telegram-bot-api:" not in service_bodies["bot"]:
+        fail("bot service must depend on telegram-bot-api")
 
 
 def check_nginx_proxy() -> None:

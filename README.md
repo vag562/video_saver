@@ -23,7 +23,7 @@ Telegram-бот принимает ссылку на видео (YouTube, TikTok
    cp .env.example .env
    ```
 
-2. Заполните `BOT_TOKEN`, `PUBLIC_BASE_URL`, пароли PostgreSQL и при необходимости `ADMIN_USER_IDS`.
+2. Заполните `BOT_TOKEN`, `PUBLIC_BASE_URL`, пароли PostgreSQL, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` для Local Telegram Bot API и при необходимости `ADMIN_USER_IDS`. Если хотите использовать стандартный Telegram Bot API, оставьте `BOT_API_BASE_URL=` пустым и не используйте local Bot API server.
 
 3. Запустите сервисы:
 
@@ -48,7 +48,9 @@ Telegram-бот принимает ссылку на видео (YouTube, TikTok
 | Переменная | Описание |
 | --- | --- |
 | `BOT_TOKEN` | Токен Telegram-бота. Не храните реальный токен в репозитории. |
-| `BOT_API_BASE_URL` | Опциональный URL local Telegram Bot API server. Если пусто, используется стандартный Telegram Bot API. |
+| `BOT_API_BASE_URL` | URL local Telegram Bot API server. Для Docker по умолчанию: `http://telegram-bot-api:8081`. Если пусто, используется стандартный Telegram Bot API. |
+| `TELEGRAM_API_ID` | API ID для Local Telegram Bot API server. Получается в Telegram API tools. |
+| `TELEGRAM_API_HASH` | API hash для Local Telegram Bot API server. Получается в Telegram API tools. |
 | `PUBLIC_BASE_URL` | Публичный адрес backend/Nginx для временных ссылок. |
 | `DATABASE_URL` | SQLAlchemy URL PostgreSQL (`postgresql+asyncpg://...`). |
 | `REDIS_URL` | URL Redis для RQ. |
@@ -86,7 +88,8 @@ ffmpeg -y -i input.mp4 -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -mov
 
 ## Архитектура
 
-- `bot` — aiogram polling, проверка ссылок и постановка задач.
+- `telegram-bot-api` — Local Telegram Bot API server на `http://telegram-bot-api:8081` внутри Docker-сети.
+- `bot` — aiogram polling, проверка ссылок и постановка задач; зависит от `telegram-bot-api` при Docker-запуске.
 - `worker` — RQ worker, скачивание через `yt-dlp`, проверка через `ffprobe`, конвертация несовместимых AV1/VP9/Opus файлов через `ffmpeg` и отправка результата пользователю.
 - `api` — FastAPI для healthcheck и временных download-ссылок.
 - `cleanup` — периодически помечает истекшие задачи `expired` и удаляет файлы.
@@ -96,10 +99,18 @@ ffmpeg -y -i input.mp4 -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -mov
 
 ## Local Telegram Bot API server
 
-Если вы используете локальный Telegram Bot API server, задайте:
+В Docker Compose добавлен сервис `telegram-bot-api` на образе `aiogram/telegram-bot-api`. Он доступен другим контейнерам по адресу:
+
+```text
+http://telegram-bot-api:8081
+```
+
+Для включения Local Telegram Bot API заполните в `.env`:
 
 ```env
 BOT_API_BASE_URL=http://telegram-bot-api:8081
+TELEGRAM_API_ID=123456
+TELEGRAM_API_HASH=replace_me
 ```
 
-Если переменная пустая, aiogram будет работать со стандартным Telegram Bot API.
+Если хотите использовать стандартный Telegram Bot API, оставьте `BOT_API_BASE_URL=` пустым. Код бота в этом случае не настраивает local endpoint и использует стандартный Telegram Bot API.
