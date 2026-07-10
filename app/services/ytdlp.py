@@ -45,7 +45,7 @@ def extract_info(url: str) -> dict[str, Any]:
             raise VideoInfoError("unsupported_url", "Ссылка не поддерживается") from exc
         raise VideoInfoError("video_unavailable", "Видео недоступно или ссылка некорректна") from exc
     except Exception as exc:
-        raise VideoInfoError("yt_dlp_error", "Не удалось получить информацию о видео") from exc
+        raise VideoInfoError("yt_dlp_error", "Не удалось проверить видео. Попробуйте другую ссылку.") from exc
     if not info:
         raise VideoInfoError("video_unavailable", "Видео недоступно")
     return info
@@ -108,8 +108,8 @@ def download(url: str, quality: str, output_dir: Path, job_id: str) -> Path:
         cleanup_partial_files(output_dir, job_id)
         msg = str(exc).lower()
         if "ffmpeg" in msg:
-            raise VideoInfoError("ffmpeg_error", "Ошибка ffmpeg при обработке файла") from exc
-        raise VideoInfoError("yt_dlp_error", "Ошибка yt-dlp при скачивании") from exc
+            raise VideoInfoError("ffmpeg_error", "Не удалось обработать видео. Попробуйте другое качество.") from exc
+        raise VideoInfoError("yt_dlp_error", "Не удалось скачать видео. Попробуйте другое качество или ссылку.") from exc
     matches = [path for path in output_dir.glob(f"{job_id}.*") if not path.name.endswith((".part", ".ytdl"))]
     if not matches:
         raise VideoInfoError("yt_dlp_error", "Файл не был создан")

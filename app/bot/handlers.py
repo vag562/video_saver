@@ -37,7 +37,7 @@ async def start(message: Message) -> None:
 
 async def handle_url(message: Message) -> None:
     assert message.text and message.from_user
-    await message.answer("Проверяю ссылку через yt-dlp...")
+    await message.answer("Проверяю видео...")
     metadata_started = perf_counter()
     try:
         info = extract_info(message.text.strip())
@@ -51,7 +51,7 @@ async def handle_url(message: Message) -> None:
         for item in data["formats"]
     ]
     sent = await message.answer(
-        f"<b>{data['title']}</b>\nДлительность: {data['duration'] or 'неизвестно'} сек.\nВыберите качество:",
+        f"<b>{data['title']}</b>\n\nВыберите качество:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
     redis_connection().setex(
@@ -109,5 +109,5 @@ async def handle_quality(callback: CallbackQuery) -> None:
         "app.worker.tasks.process_download", str(job.id), metadata_time, job_timeout="6h"
     )
     redis_connection().delete(pending_video_key(callback.from_user.id, callback.message.message_id))
-    await callback.message.answer(f"Задача создана: <code>{job.id}</code>\nСтатус: pending")
+    await callback.message.answer("Уже скачиваем видео ❤️\nОжидание может занять до минуты ⏳")
     await callback.answer()

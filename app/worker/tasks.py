@@ -17,6 +17,7 @@ from app.services.storage import ensure_free_space, expires_at, make_token, safe
 from app.services.ytdlp import VideoInfoError, download, is_fast_quality
 
 logger = logging.getLogger(__name__)
+SUCCESS_CAPTION = "✅ Скачано при помощи: @savefromyttt_bot"
 
 
 def process_download(job_id: str, metadata_time: float = 0) -> None:
@@ -183,7 +184,7 @@ def send_cached_video(chat_id: int, telegram_file_id: str) -> float:
 
     async def _send() -> None:
         async with create_bot() as bot:
-            await bot.send_video(chat_id, telegram_file_id, supports_streaming=True)
+            await bot.send_video(chat_id, telegram_file_id, caption=SUCCESS_CAPTION, supports_streaming=True)
 
     started = perf_counter()
     asyncio.run(_send())
@@ -226,7 +227,7 @@ def notify_user(
                         message = await bot.send_video(
                             job.chat_id,
                             FSInputFile(job.file_path),
-                            caption="Готово",
+                            caption=SUCCESS_CAPTION,
                             supports_streaming=True,
                             duration=probe.duration if probe else None,
                             width=probe.width if probe else None,
@@ -234,13 +235,13 @@ def notify_user(
                         )
                     except Exception:
                         logger.exception("send_video failed for job %s; falling back to send_document", job.id)
-                        await bot.send_document(job.chat_id, FSInputFile(job.file_path), caption="Готово")
+                        await bot.send_document(job.chat_id, FSInputFile(job.file_path), caption=SUCCESS_CAPTION)
                         return
                     if message.video and normalized_url and key:
                         upsert_media_cache(session, job, normalized_url, platform, message.video, probe)
                     return
 
-                await bot.send_document(job.chat_id, FSInputFile(job.file_path), caption="Готово")
+                await bot.send_document(job.chat_id, FSInputFile(job.file_path), caption=SUCCESS_CAPTION)
 
     started = perf_counter()
     asyncio.run(_send())

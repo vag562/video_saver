@@ -147,6 +147,33 @@ def check_dockerfile_tools() -> None:
         fail("Dockerfile must copy deno from denoland/deno:bin")
 
 
+def check_user_facing_texts() -> None:
+    handlers = (ROOT / "app/bot/handlers.py").read_text(encoding="utf-8")
+    worker = (ROOT / "app/worker/tasks.py").read_text(encoding="utf-8")
+    required_handler_texts = [
+        "Проверяю видео...",
+        "Выберите качество:",
+        "Уже скачиваем видео ❤️",
+        "Ожидание может занять до минуты ⏳",
+    ]
+    for text in required_handler_texts:
+        if text not in handlers:
+            fail(f"bot handlers must include user text: {text}")
+    forbidden_handler_texts = [
+        "Проверяю ссылку через yt-dlp",
+        "Длительность:",
+        "Задача создана",
+        "Статус: pending",
+    ]
+    for text in forbidden_handler_texts:
+        if text in handlers:
+            fail(f"bot handlers must not expose technical text: {text}")
+    if "✅ Скачано при помощи: @savefromyttt_bot" not in worker:
+        fail("worker must use the public success caption")
+    if 'caption="Готово"' in worker or "caption='Готово'" in worker:
+        fail("worker must not use the old success caption")
+
+
 def check_important_hooks() -> None:
     factory = (ROOT / "app/bot/factory.py").read_text(encoding="utf-8")
     if "BOT_API_BASE_URL" not in (ROOT / "app/core/config.py").read_text(encoding="utf-8"):
@@ -192,6 +219,7 @@ def main() -> int:
     check_compose_services()
     check_nginx_proxy()
     check_dockerfile_tools()
+    check_user_facing_texts()
     check_important_hooks()
     print("Smoke check passed")
     return 0
